@@ -1,0 +1,4 @@
+.idea/
+instance/
+venv/
+*.sqlite
