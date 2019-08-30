@@ -1,6 +1,6 @@
 import functools
 
-from flask import Flask, request, url_for, flash, redirect, g, make_response
+from flask import Flask, Blueprint, request, url_for, flash, redirect, g, make_response, abort
 from flask_github import GitHub
 from flask_sqlalchemy import SQLAlchemy
 
@@ -16,26 +16,37 @@ github = GitHub(app)
 def require_user(func):
     @functools.wraps(func)
     def decorator(*args, **kwargs):
-        print("require_user")
         if g.user is None:
-            raise Unauthorized("Endpoint requires authorization")
+            raise abort(401)
 
         return func(*args, **kwargs)
 
     return decorator
 
 
+def require_token(func):
+    @functools.wraps(func)
+    def decorator(*args, **kwargs):
+        if g.token is None:
+            raise abort(401)
+        return func(*args, **kwargs)
+
+    return decorator
+
+
+from .models import *
+
 # Import later to prevent import errors
 from .util import *
-from .exc import *
-from .models import *
-from .views.api import api
 
 app.url_map.converters['version'] = VersionConverter
+app.url_map.converters['srgtype'] = SrgTypeConverter
+from .api import api_bp
 
-app.register_blueprint(api, url_prefix='/api')
+app.register_blueprint(api_bp)
 
 github_token_cookie = 'GitHubToken'
+mcpdb_api_token_header = 'MCPDB-API-Token'
 
 
 @app.before_request
@@ -44,8 +55,17 @@ def load_user():
     if github_token_cookie in request.cookies:
         user = Users.query.filter_by(github_token=request.cookies[github_token_cookie]).first()
         if user is None:
-            raise Forbidden("Authorization failed")
+            raise abort(403)
         g.user = user
+
+
+@app.before_request
+def authorize_token():
+    if mcpdb_api_token_header in request.headers:
+        token = Tokens.query.filter_by(github_token=request.headers[mcpdb_api_token_header]).first()
+        if token is None:
+            raise abort(403)
+        g.token = token
 
 
 @app.route('/login')

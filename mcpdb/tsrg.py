@@ -28,10 +28,16 @@ class SrgContainer(Generic[T], Iterable[T]):
         self.by_obf[mapping.obf] = mapping
 
     def map(self, unmapped):
-        return self.by_obf.get(unmapped, unmapped)
+        c = self.by_obf.get(unmapped)
+        if c is None:
+            return unmapped
+        return c.srg
 
     def unmap(self, mapped):
-        return self.by_srg.get(mapped, mapped)
+        c = self.by_srg.get(mapped)
+        if c is None:
+            return mapped
+        return c.obf
 
     def __iter__(self):
         return iter(self.by_srg.values())
@@ -48,7 +54,13 @@ class TSrg:
 
     def signature(self, sig: Tuple[List[str], str]):
         args, ret = sig
-        return f"({''.join(map(self.classes.map, args))}){self.classes.map(ret)}"
+
+        def map_param(name):
+            if name[0] == 'L':
+                return f"L{self.classes.map(name[1:-1])};"
+            return name
+
+        return f"({''.join(map_param(p) for p in args)}){map_param(ret)}"
 
 
 @dataclass
@@ -58,7 +70,7 @@ class TClass(SrgMapping):
     methods: Dict[str, TMethod] = field(default_factory=dict)
 
     def add_constructor(self, c_id, owner, signature):
-        self.constructors[c_id] = TConstructor(c_id, owner, parse_signature(signature))
+        self.constructors[c_id] = TConstructor(c_id, owner, parse_descriptor(signature))
 
 
 @dataclass
@@ -114,7 +126,7 @@ def parse(tsrg_stream: Iterable[str]) -> TSrg:
         elif '(' in line:
             # Methods
             obf, sig, srg = line.strip().split(' ')
-            m = TMethod(obf, srg, parse_signature(sig), current_class)
+            m = TMethod(obf, srg, parse_descriptor(sig), current_class)
             current_class.methods[srg] = m
             tsrg.methods[srg] = m
         else:
@@ -127,7 +139,7 @@ def parse(tsrg_stream: Iterable[str]) -> TSrg:
     return tsrg
 
 
-def parse_signature(signature) -> Tuple[List[str], str]:
+def parse_descriptor(signature) -> Tuple[List[str], str]:
     args, ret = re.match(r'\((.*)\)(.*)', signature).groups()
     targs = []
     array = 0

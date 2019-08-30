@@ -6,6 +6,8 @@ setup(
     python_requires=">=3.7",
     install_requires=[
         'flask',
+        'flask-httpauth',
+        'flask-restplus',
         'github-flask',
         'flask_sqlalchemy',
         'sqlalchemy',
