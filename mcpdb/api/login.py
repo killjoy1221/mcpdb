@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from flask import request, abort, jsonify, g
 from flask_httpauth import HTTPTokenAuth
@@ -67,9 +67,11 @@ class LoginResource(Resource):
 
         delta = timedelta(seconds=duration)
         exp_date = datetime.utcnow() + delta
+        exp_date.replace(tzinfo=timezone.utc)
+
         return '', 204, {
             'Authorization': b"Bearer " + token,
-            'Expires': exp_date
+            'Expires': format(exp_date, '%a %s %h %Y %H:%M:%S %Z')
         }
 
 
