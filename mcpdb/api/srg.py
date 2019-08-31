@@ -1,53 +1,53 @@
+import string
+
 import sqlalchemy.orm.exc
-from flask import abort, request, g, jsonify
+from flask import abort, request, g
 from flask_restplus import Resource, fields
 
-from . import api
-from ..models import Tokens, Classes, Versions
+from mcpdb import db
+from . import api, auth
+from ..models import Classes, Versions, Users
 from ..util import *
 
-base_model = api.model('BaseSrg', dict(
-    version=fields.String,
-    obf_name=fields.String,
-    srg_name=fields.String
-))
+__all__ = ()
 
-class_model = api.inherit('Class', base_model, dict(
+base_model = api.model('Srg Named', {
+    'version': fields.String,
+    'obf_name': fields.String,
+    'srg_name': fields.String
+})
 
-))
+field_model = api.inherit('Field', base_model, {
+    'mcp_name': fields.String(attribute='last_change.mcp_name'),
+    'owner': fields.String(attribute='owner.srg_name'),
+    'locked': fields.Boolean
+})
+param_model = api.inherit('Parameter', field_model, {
+    'index': fields.Integer,
+    'type': fields.String})
 
-field_model = api.inherit('Field', base_model, dict(
-    mcp_name=fields.String(attribute='last_change.mcp_name'),
-    owner=fields.String(attribute='owner.srg_name'),
-    locked=fields.Boolean
-))
-param_model = api.inherit('Parameter', field_model, dict(
-    index=fields.Integer,
-    type=fields.String
-))
+method_model = api.inherit('Method', field_model, {
+    'descriptor': fields.String,
+    'parameters': fields.Nested(param_model)
+})
 
-method_model = api.inherit('Method', field_model, dict(
-    descriptor=fields.String,
-    parameters=fields.Nested(param_model)
-))
-
-srg_update = api.model('Srg Update', dict(
-    changed=fields.Boolean,
-    old_name=fields.String,
-))
+srg_update = api.model('Srg Update', {
+    'changed': fields.Boolean,
+    'old_name': fields.String
+})
 
 srg_input_model = api.model('Srg Input', {
     'mcpname': fields.String,
     'force': fields.Boolean
 })
 
-history_model = api.model('History', dict(
-    version=fields.String,
-    srg_name=fields.String(attribute='srg'),
-    mcp_name=fields.String(attribute='name'),
-    changed_by=fields.String(attribute='changed_by.name'),
-    created=fields.DateTime
-))
+history_model = api.model('History', {
+    'version': fields.String,
+    'srg_name': fields.String,
+    'mcp_name': fields.String,
+    'changed_by': fields.String(attribute='changed_by.username'),
+    'created': fields.DateTime
+})
 
 
 def get_srg_name(srg_type: SrgType, name: str):
@@ -113,10 +113,15 @@ def get_srg_name(srg_type: SrgType, name: str):
     return info
 
 
+valid_member_chars = string.ascii_letters + string.digits + "_$"
+
+
+@auth.login_required
 def set_srg_name(srg_type: SrgType, name: str):
-    version = get_version(request.param.get('version', 'latest'))
+    version = get_version(request.values.get('version', 'latest'))
     if version is None:
-        raise abort(404)
+        raise abort(404, "No such version")
+    version = version.version
 
     try:
         mcp = request.json['mcpname']
@@ -124,9 +129,13 @@ def set_srg_name(srg_type: SrgType, name: str):
     except KeyError:
         raise abort(400)
 
-    token: Tokens = g.token
+    filtered = ''.join(c for c in mcp if c in valid_member_chars)
+    if mcp != filtered or mcp[0] in string.digits:
+        raise abort(400, "Illegal member name")
 
-    if force and not token.user.admin:
+    user: Users = g.user
+
+    if force and not user.admin:
         raise abort(403)
 
     info = srg_type.table.query.filter_by(version=version, srg_name=name).one_or_none()
@@ -136,22 +145,27 @@ def set_srg_name(srg_type: SrgType, name: str):
     if info.locked and not force:
         raise abort(403)
 
-    old_mcp = info.mcp
+    if info.last_change is not None:
+        old_mcp = info.last_change.mcp_name
+    else:
+        old_mcp = None
 
-    if info.mcp == mcp:
-        return jsonify(
+    if old_mcp == mcp:
+        return dict(
             changed=False,
             old_name=old_mcp
         )
 
-    info.last_changed = srg_type.history(
+    info.last_change = srg_type.history(
         version=version,
         srg_name=name,
         mcp_name=mcp,
-        changed_by=token.user
+        changed_by=user
     )
 
-    return jsonify(
+    db.session.commit()
+
+    return dict(
         changed=True,
         old_name=old_mcp,
     )
@@ -181,7 +195,7 @@ class ClassResource(Resource):
 
     @api.doc(params={'version': 'The Minecraft Version, defaults to latest.'},
              responses={404: "No name found or ambiguous class"})
-    @api.marshal_with(class_model)
+    @api.marshal_with(base_model)
     def get(self, name):
         return get_srg_name(ClassType, name)
 
@@ -205,12 +219,15 @@ def _init_resources():
 
         @api.route(f"/{endpoint_name}/<name>/history")
         class HistoryResource(Resource):
-            @api.marshal_with(history_model)
+            @api.marshal_with(history_model, as_list=True)
             def get(self, name):
-                version = get_version(request.param.get('version', 'latest'))
+                version = get_version(request.values.get('version', 'latest'))
                 if version is None:
                     abort(404)
-                return srg_type.history.filter_by(version=version, name=name).all()
+                version = version.version
+                h = srg_type.history.query.filter_by(version=version, srg_name=name).all()
+                print(h)
+                return h
 
     for n, t, m in [("field", FieldType, field_model),
                     ("method", MethodType, method_model),

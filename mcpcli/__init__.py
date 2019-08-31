@@ -25,13 +25,13 @@ def gf(srg, version):
 @click.argument('srg')
 @click.argument('name')
 @click.option('--version', default='latest', type=str)
-@click.option('--force', is_flag=True)
+@click.option('--force', '-f', is_flag=True)
 def sf(srg, name, version, force):
     data = {
         'mcpname': name,
         'force': force
     }
-    with requests.put(f'{url}/field/{version}/{srg}', json=data) as resp:
+    with requests.put(f'{url}/field/{srg}?version={version}', json=data) as resp:
         click.echo(resp.json())
 
 

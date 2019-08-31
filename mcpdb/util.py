@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import functools
 import io
 import zipfile
 from dataclasses import dataclass
@@ -8,14 +7,11 @@ from typing import TypeVar, Generic, Type
 from xml.etree import ElementTree
 
 import requests
-from flask import abort, g
 
 from .models import *
 from .tsrg import parse
 
 __all__ = (
-    "require_user",
-    "require_token",
     "get_latest",
     "get_version",
     "descriptor_to_type",
@@ -25,27 +21,6 @@ __all__ = (
     "MethodType",
     "ParamType"
 )
-
-
-def require_user(func):
-    @functools.wraps(func)
-    def decorator(*args, **kwargs):
-        if g.user is None:
-            raise abort(401)
-
-        return func(*args, **kwargs)
-
-    return decorator
-
-
-def require_token(func):
-    @functools.wraps(func)
-    def decorator(*args, **kwargs):
-        if g.token is None:
-            raise abort(401)
-        return func(*args, **kwargs)
-
-    return decorator
 
 
 def get_latest() -> Versions:

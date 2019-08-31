@@ -6,11 +6,23 @@ from ... import util
 from ...models import *
 from ...tsrg import *
 
+__all__ = ()
+
 
 def check_loaded_version(version):
     if not util.get_version(version):
         raise click.ClickException("Version does not exist or is not loaded.")
     return version
+
+
+@bp.cli.command()
+@click.argument("username")
+@click.password_option('--password')
+def adduser(username, password):
+    user = Users(username=username, password=password)
+    db.session.add(user)
+    db.session.commit()
+    click.echo("User created.")
 
 
 @bp.cli.command()
@@ -45,11 +57,12 @@ def import_tsrg(version):
         raise click.ClickException("No such version")
 
     tsrg = util.load_tsrg_mappings(version)
+
     import_tsrg_mappings(version, tsrg)
 
-    click.echo("Committing to database")
+    click.echo("Committing to database...", nl=False)
     db.session.commit()
-
+    click.echo(" Done")
     vers = Versions(version=version)
 
     click.echo("Checking if it needs to be promoted")
@@ -59,7 +72,6 @@ def import_tsrg(version):
         vers.latest = Active.true
 
     db.session.add(vers)
-
     db.session.commit()
 
 
@@ -75,12 +87,15 @@ def import_tsrg_mappings(version, mappings: TSrg):
         clas = Classes(version=version, obf_name=cl.obf.replace('/', '.'), srg_name=cl.srg.replace('/', '.'))
 
         for field in cl.fields.values():
-            clas.fields.append(Fields(version=version, obf_name=field.obf, srg_name=field.srg, srg_id=field.srg_id))
+            sid = field.srg_id
+            clas.fields.append(
+                Fields(version=version, obf_name=field.obf, srg_name=field.srg, srg_id=sid, locked=sid is None))
 
         for method in cl.methods.values():
             desc = mappings.descriptor(method.desc)
-            mtd = Methods(version=version, obf_name=method.obf, srg_name=method.srg, srg_id=method.srg_id,
-                          descriptor=desc)
+            sid = method.srg_id
+            mtd = Methods(version=version, obf_name=method.obf, srg_name=method.srg, srg_id=sid,
+                          locked=sid is None, descriptor=desc)
             clas.methods.append(mtd)
 
             for i, (p_type, p_name) in enumerate(zip(method.desc[0], method.params)):

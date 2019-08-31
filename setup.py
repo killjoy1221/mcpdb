@@ -15,6 +15,7 @@ setup(
         'passlib',
         'werkzeug',
         'requests',
-        'click'
+        'click',
+        'itsdangerous'
     ]
 )

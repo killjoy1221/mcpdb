@@ -6,13 +6,12 @@ from typing import Type, List
 from sqlalchemy import Text, ForeignKey, Column, Integer, Boolean, Enum
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import relationship
-from sqlalchemy_utils import Timestamp, generic_repr
+from sqlalchemy_utils import Timestamp, generic_repr, PasswordType, Password
 
 from . import db
 
 __all__ = (
     "Users",
-    "Tokens",
     "Active",
     "Versions",
     "Classes",
@@ -28,23 +27,9 @@ __all__ = (
 @generic_repr
 class Users(db.Model):
     id: int = Column(Integer, primary_key=True, autoincrement=True)
-    github_token: str = Column(Text, nullable=False)
-    name: str = Column(Text, nullable=False)
+    username: str = Column(Text, nullable=False)
+    password: Password = Column(PasswordType(schemes='pbkdf2_sha512'), nullable=False)
     admin: bool = Column(Boolean, default=False)
-
-    tokens: List[Tokens]
-
-
-@generic_repr
-class Tokens(db.Model):
-    id: int = Column(Integer, primary_key=True, autoincrement=True)
-    user_id: int = Column(Integer, ForeignKey(Users.id), nullable=False)
-    token: str = Column(Text, nullable=False, unique=True)
-
-    user: Users = relationship(Users)
-
-
-Users.tokens = relationship(Tokens)
 
 
 class Active(enum.Enum):
@@ -114,7 +99,7 @@ class MethodHistory(db.Model, _SrgHistory):
 
 @generic_repr
 class Methods(db.Model, _SrgNamed(MethodHistory)):
-    srg_id: str = Column(Text, nullable=False)
+    srg_id: str = Column(Integer)
     descriptor: str = Column(Text, nullable=False)
     class_id = Column(Integer, ForeignKey("classes.id"))
 
@@ -129,7 +114,7 @@ class FieldHistory(db.Model, _SrgHistory):
 
 @generic_repr
 class Fields(db.Model, _SrgNamed(FieldHistory)):
-    srg_id: str = Column(Text, nullable=False)
+    srg_id: str = Column(Integer)
     class_id = Column(Integer, ForeignKey("classes.id"))
     owner = relationship("Classes", back_populates='fields')
 

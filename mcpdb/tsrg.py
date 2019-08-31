@@ -76,7 +76,7 @@ class TField(SrgMapping):
     @property
     def srg_id(self):
         m = field_regex.match(self.srg)
-        return m.group(1) if m else self.srg
+        return int(m.group(1)) if m else None
 
 
 @dataclass
@@ -95,13 +95,15 @@ class TMethod(SrgMapping):
     @property
     def srg_id(self):
         m = func_regex.match(self.srg)
-        return m.group(1) if m else self.srg
+        return int(m.group(1)) if m else None
 
     @property
     def params(self):
         start = 0 if self.static else 1
         end = start + len(self.desc[0])
-        return [f'p_{self.srg_id}_{n}_' for n in range(start, end)]
+        sid = self.srg_id
+        sid = sid if sid is not None else self.obf
+        return [f'p_{sid}_{n}_' for n in range(start, end)]
 
 
 def parse(tsrg_stream: Iterable[str]) -> TSrg:
