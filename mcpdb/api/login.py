@@ -71,7 +71,7 @@ class LoginResource(Resource):
 
         return '', 204, {
             'Authorization': b"Bearer " + token,
-            'Expires': format(exp_date, '%a %s %h %Y %H:%M:%S %Z')
+            'Expires': format(exp_date, '%c %Z')
         }
 
 
