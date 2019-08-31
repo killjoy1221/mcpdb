@@ -5,15 +5,15 @@ from flask import jsonify, g, request, abort
 from flask_restplus import Resource, fields
 
 from . import api
-from .. import require_user, db
+from .. import db
+from ..util import require_user
 from ..models import *
 
 sysrand = random.SystemRandom()
 valid_token_chars = string.digits + string.ascii_letters
 
 token_model = api.model("Token", {
-    'token': fields.String,
-    'description': fields.String,
+    'token': fields.String
 })
 
 
@@ -25,21 +25,18 @@ class TokenResource(Resource):
         user: Users = g.user
         return jsonify([{
             'token': t.token,
-            'description': t.description
         } for t in user.tokens])
 
     @require_user
     @api.marshal_with(token_model)
     def post(self):
         user: Users = g.user
-        descr: str = request.json['description']
 
         # Generate a secure random string
         token_string = ''.join(sysrand.choices(valid_token_chars, k=24))
 
         token = Tokens(
             user=user,
-            description=descr,
             token=token_string)
 
         user.tokens.append(token)

@@ -4,6 +4,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Dict, TypeVar, Generic, Optional, Iterable, List, Tuple
 
+__all__ = ("TSrg", "parse", "parse_descriptor")
+
 field_regex = re.compile(r'^field_(\d+)_(\w+)$')
 func_regex = re.compile(r'^func_(\d+)_(\w+)$')
 param_regex = re.compile(r'^p_(\d+)_(\d+)_$')
@@ -27,18 +29,6 @@ class SrgContainer(Generic[T], Iterable[T]):
         self.by_srg[mapping.srg] = mapping
         self.by_obf[mapping.obf] = mapping
 
-    def map(self, unmapped):
-        c = self.by_obf.get(unmapped)
-        if c is None:
-            return unmapped
-        return c.srg
-
-    def unmap(self, mapped):
-        c = self.by_srg.get(mapped)
-        if c is None:
-            return mapped
-        return c.obf
-
     def __iter__(self):
         return iter(self.by_srg.values())
 
@@ -52,12 +42,18 @@ class TSrg:
         self.fields: Dict[str, TField] = {}
         self.methods: Dict[str, TMethod] = {}
 
-    def signature(self, sig: Tuple[List[str], str]):
-        args, ret = sig
+    def map_type(self, name):
+        c = self.classes.by_obf.get(name)
+        if c is None:
+            return name
+        return c.srg
+
+    def descriptor(self, desc: Tuple[List[str], str]):
+        args, ret = desc
 
         def map_param(name):
             if name[0] == 'L':
-                return f"L{self.classes.map(name[1:-1])};"
+                return f"L{self.map_type(name[1:-1])};"
             return name
 
         return f"({''.join(map_param(p) for p in args)}){map_param(ret)}"
@@ -92,7 +88,7 @@ class TConstructor:
 
 @dataclass
 class TMethod(SrgMapping):
-    sig: Tuple[List[str], str]
+    desc: Tuple[List[str], str]
     owner: TClass
     static: bool = False
 
@@ -102,15 +98,9 @@ class TMethod(SrgMapping):
         return m.group(1) if m else self.srg
 
     @property
-    def obf_params(self):
+    def params(self):
         start = 0 if self.static else 1
-        end = start + len(self.sig[0])
-        return [f'p_{self.obf}_{n}_' for n in range(start, end)]
-
-    @property
-    def srg_params(self):
-        start = 0 if self.static else 1
-        end = start + len(self.sig[0])
+        end = start + len(self.desc[0])
         return [f'p_{self.srg_id}_{n}_' for n in range(start, end)]
 
 

@@ -5,6 +5,7 @@ DEBUG = False
 
 # https://flask-sqlalchemy.palletsprojects.com/en/2.x/config/#configuration-keys
 SQLALCHEMY_DATABASE_URI = "sqlite:///mcpdb.sqlite"
+SQLALCHEMY_TRACK_MODIFICATIONS = False
 SQLALCHEMY_ECHO = False
 
 GITHUB_CLIENT_ID = None

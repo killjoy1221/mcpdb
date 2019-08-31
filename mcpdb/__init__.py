@@ -1,6 +1,6 @@
 import functools
 
-from flask import Flask, Blueprint, request, url_for, flash, redirect, g, make_response, abort
+from flask import Flask, request, url_for, flash, redirect, g, make_response, abort
 from flask_github import GitHub
 from flask_sqlalchemy import SQLAlchemy
 
@@ -13,37 +13,14 @@ db = SQLAlchemy(app)
 github = GitHub(app)
 
 
-def require_user(func):
-    @functools.wraps(func)
-    def decorator(*args, **kwargs):
-        if g.user is None:
-            raise abort(401)
-
-        return func(*args, **kwargs)
-
-    return decorator
-
-
-def require_token(func):
-    @functools.wraps(func)
-    def decorator(*args, **kwargs):
-        if g.token is None:
-            raise abort(401)
-        return func(*args, **kwargs)
-
-    return decorator
-
-
 from .models import *
 
 # Import later to prevent import errors
 from .util import *
 
-app.url_map.converters['version'] = VersionConverter
-app.url_map.converters['srgtype'] = SrgTypeConverter
-from .api import api_bp
+from .api import bp
 
-app.register_blueprint(api_bp)
+app.register_blueprint(bp)
 
 github_token_cookie = 'GitHubToken'
 mcpdb_api_token_header = 'MCPDB-API-Token'

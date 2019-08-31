@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import enum
 from typing import Type, List
 
-from sqlalchemy import Text, ForeignKey, Column, Integer, Boolean
+from sqlalchemy import Text, ForeignKey, Column, Integer, Boolean, Enum
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import relationship
 from sqlalchemy_utils import Timestamp, generic_repr
@@ -12,6 +13,7 @@ from . import db
 __all__ = (
     "Users",
     "Tokens",
+    "Active",
     "Versions",
     "Classes",
     "FieldHistory",
@@ -37,7 +39,6 @@ class Users(db.Model):
 class Tokens(db.Model):
     id: int = Column(Integer, primary_key=True, autoincrement=True)
     user_id: int = Column(Integer, ForeignKey(Users.id), nullable=False)
-    description: str = Column(Text, nullable=False)
     token: str = Column(Text, nullable=False, unique=True)
 
     user: Users = relationship(Users)
@@ -46,10 +47,15 @@ class Tokens(db.Model):
 Users.tokens = relationship(Tokens)
 
 
+class Active(enum.Enum):
+    true = True
+
+
 @generic_repr
 class Versions(db.Model):
     id: int = Column(Integer, primary_key=True, autoincrement=True)
     version: str = Column(Text, nullable=False, unique=True)
+    latest: bool = Column(Enum(Active), unique=True)
 
 
 @generic_repr
@@ -109,7 +115,7 @@ class MethodHistory(db.Model, _SrgHistory):
 @generic_repr
 class Methods(db.Model, _SrgNamed(MethodHistory)):
     srg_id: str = Column(Text, nullable=False)
-    signature: str = Column(Text, nullable=False)
+    descriptor: str = Column(Text, nullable=False)
     class_id = Column(Integer, ForeignKey("classes.id"))
 
     owner: Classes = relationship("Classes", back_populates='methods')
@@ -135,6 +141,8 @@ class ParameterHistory(db.Model, _SrgHistory):
 
 @generic_repr
 class Parameters(db.Model, _SrgNamed(ParameterHistory)):
+    index = Column(Integer, nullable=False)
+    type = Column(Text, nullable=False)
     method_id = Column(Integer, ForeignKey('methods.id'), nullable=False)
     owner: Methods = relationship("Methods", back_populates='parameters')
 
