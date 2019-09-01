@@ -48,7 +48,7 @@ def promote(version: Versions):
     db.session.commit()
 
 
-@bp.cli.group()
+@bp.cli.command()
 @click.argument("version", type=str)
 @click.option("--target", type=util.get_version, default="latest")
 def import_mcp(version: str, target: Versions):
@@ -79,23 +79,51 @@ def import_mcp(version: str, target: Versions):
 
 
 def import_mcp_mappings(user: Users, version: str, mappings: mcp.McpExport):
-    def process(name, m, table, history):
-        entries = {t.srg_name: t for t in table.query.filter_by(version=version)}
-        for i, f in enumerate(m):
-            click.echo(f"\rProcessing {name} {i}/{len(m)}... ", nl=False)
-            if f.searge in entries:
-                info = entries[f.searge]
+    def process(m, srg_type: util.SrgType):
+        name = srg_type.table.__tablename__
+        entries = {t.srg_name: t for t in srg_type.table.query.filter_by(version=version)}
+        for i, e in enumerate(m):
+            click.echo(f"\rProcessing {i + 1}/{len(m) + 1} {name}... ", nl=False)
+            if e.searge in entries:
+                info = entries[e.searge]
                 if info.last_change is None:
-                    info.last_change = history(
-                        srg_name=f.searge,
-                        mcp_name=f.name,
+                    info.last_change = srg_type.history(
+                        srg_name=e.searge,
+                        mcp_name=e.name,
                         changed_by=user
                     )
         click.echo("Done")
 
-    process("field", mappings.fields, Fields, FieldHistory)
-    process("method", mappings.methods, Methods, MethodHistory)
-    process("param", mappings.params, Parameters, ParameterHistory)
+    fields = mappings.fields, util.FieldType
+    methods = mappings.methods, util.MethodType
+    params = mappings.params, util.ParamType
+
+    for f, t in fields, methods, params:
+        process(f, t)
+
+
+@bp.cli.command()
+@click.argument("target", type=util.get_version)
+@click.option("--origin", type=util.get_version, default='latest')
+def migrate_mcp(target: Versions, origin: Versions):
+    migrate_mcp_mappings(origin.version, target.version)
+
+
+def migrate_mcp_mappings(mcp_from, mcp_to):
+    def migrate(table):
+        name = table.__tablename__
+        old_entries = {e.srg_name: e for e in table.query.filter_by(version=mcp_from)}
+        new_entries = table.query.filter_by(version=mcp_to).all()
+        for i, entry in enumerate(new_entries):
+            click.echo(f"\rProcessed {i + 1}/{len(new_entries) + 1} {name}... ", nl=False)
+            if entry.srg_name in old_entries and entry.last_change is None:
+                entry.last_change = old_entries[entry.srg_name].last_change
+        click.echo("Done")
+        db.session.commit()
+
+    for t in Fields, Methods, Parameters:
+        # noinspection PyTypeChecker
+        migrate(t)
 
 
 @bp.cli.command()
@@ -120,11 +148,13 @@ def import_tsrg(version):
     click.echo(" Done")
     vers = Versions(version=version)
 
-    click.echo("Checking if it needs to be promoted")
+    click.echo("Checking if it needs to be promoted...")
     latest = util.get_latest()
     if latest is None:
         click.echo(f"Promoting {version} to latest.")
         vers.latest = Active.true
+    else:
+        click.echo("Nope.")
 
     db.session.add(vers)
     db.session.commit()
