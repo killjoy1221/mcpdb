@@ -96,7 +96,6 @@ def get_srg_name(srg_type: SrgType, name: str):
     try:
         info = table.query.filter_by(srg_id=int(name), **search).all()
     except ValueError:
-        print(search)
         # search by srg
         info = table.query.filter_by(srg_name=name, **search).all()
         if not info:
@@ -104,7 +103,7 @@ def get_srg_name(srg_type: SrgType, name: str):
             info = table.query.filter_by(obf_name=name, **search).all()
         if not info:
             # search by mcp
-            info = table.query.filter_by(**search).filter(history.mcp_name == name).all()
+            info = table.query.filter_by(**search).join(history).filter(history.mcp_name == name).all()
 
     if not info:
         raise abort(404, "Mapping not found")
