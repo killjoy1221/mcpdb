@@ -42,7 +42,6 @@ srg_input_model = api.model('Srg Input', {
 })
 
 history_model = api.model('History', {
-    'version': fields.String,
     'srg_name': fields.String,
     'mcp_name': fields.String,
     'changed_by': fields.String(attribute='changed_by.username'),
@@ -157,7 +156,6 @@ def set_srg_name(srg_type: SrgType, name: str):
         )
 
     info.last_change = srg_type.history(
-        version=version,
         srg_name=name,
         mcp_name=mcp,
         changed_by=user
@@ -221,13 +219,7 @@ def _init_resources():
         class HistoryResource(Resource):
             @api.marshal_with(history_model, as_list=True)
             def get(self, name):
-                version = get_version(request.values.get('version', 'latest'))
-                if version is None:
-                    abort(404)
-                version = version.version
-                h = srg_type.history.query.filter_by(version=version, srg_name=name).all()
-                print(h)
-                return h
+                return srg_type.history.query.filter_by(srg_name=name).all()
 
     for n, t, m in [("field", FieldType, field_model),
                     ("method", MethodType, method_model),

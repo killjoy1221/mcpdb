@@ -3,11 +3,12 @@ from __future__ import annotations
 import io
 import zipfile
 from dataclasses import dataclass
-from typing import TypeVar, Generic, Type
+from typing import TypeVar, Generic, Type, Mapping
 from xml.etree import ElementTree
 
 import requests
 
+from . import mcp
 from .models import *
 from .tsrg import parse
 
@@ -33,23 +34,52 @@ def get_version(version) -> Versions:
     return Versions.query.filter_by(version=version).one_or_none()
 
 
-mcp_config_url = 'https://files.minecraftforge.net/maven/de/oceanlabs/mcp/mcp_config'
+forge_maven = 'https://files.minecraftforge.net/maven'
 
 
-def load_mcpconfig_maven_versions():
-    with requests.get(f"{mcp_config_url}/maven-metadata.xml") as resp:
-        root = ElementTree.fromstring(resp.content)
-        versions = root.findall(".//version")
-        return {v.text for v in versions if '-' not in v.text}
+@dataclass
+class MavenArtifact:
+    project: MavenProject
+    version: str
+    classifier: str = None
+    ext: str = "zip"
+
+    @property
+    def artifact(self):
+        return "%s.%s" % ('-'.join(filter(None, [self.project.name, self.version, self.classifier])), self.ext)
+
+    @property
+    def path(self):
+        return '/'.join([self.project.path, self.version, self.artifact])
 
 
-def load_tsrg_mappings(version):
-    mapped_versions = load_mcpconfig_maven_versions()
-    if version not in mapped_versions:
-        raise ValueError()
+@dataclass
+class MavenProject:
+    maven_url: str
+    group: str
+    name: str
 
-    print(f"Fetching mcp_config-{version}.zip")
-    with requests.get(f"{mcp_config_url}/{version}/mcp_config-{version}.zip") as resp:
+    @property
+    def path(self):
+        return '/'.join([self.maven_url, *self.group.split('.'), self.name])
+
+    @property
+    def maven_metadata(self):
+        return '/'.join([self.path, 'maven-metadata.xml'])
+
+    def load_versions(self) -> Mapping[str, MavenArtifact]:
+        with requests.get(self.maven_metadata) as resp:
+            root = ElementTree.fromstring(resp.content)
+            versions = root.findall(".//version")
+            return {v.text: MavenArtifact(self, v.text) for v in versions}
+
+
+mcp_config = MavenProject(forge_maven, 'de.oceanlabs.mcp', 'mcp_config')
+mcp_stable = MavenProject(forge_maven, 'de.oceanlabs.mcp', 'mcp_stable')
+
+
+def load_tsrg_mappings(artifact: MavenArtifact):
+    with requests.get(artifact.path) as resp:
         zipbytes = io.BytesIO(resp.content)
 
         with zipfile.ZipFile(zipbytes, 'r') as z:
@@ -67,6 +97,12 @@ def load_tsrg_mappings(version):
                     ts.classes.by_srg[owner].add_constructor(*c.split(' '))
 
             return ts
+
+
+def load_mcp_mappings(artifact: MavenArtifact):
+    with requests.get(artifact.path) as resp:
+        zipbytes = io.BytesIO(resp.content)
+        return mcp.read_mcp_export(zipfile.ZipFile(zipbytes, 'r'))
 
 
 SIMPLE_DESC = {

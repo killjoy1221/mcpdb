@@ -2,6 +2,7 @@ import click
 
 from .. import bp
 from ... import db
+from ... import mcp
 from ... import util
 from ...models import *
 from ...tsrg import *
@@ -13,6 +14,13 @@ def check_loaded_version(version):
     if not util.get_version(version):
         raise click.ClickException("Version does not exist or is not loaded.")
     return version
+
+
+@bp.cli.command()
+@click.argument("statement")
+def execute(statement):
+    for s in db.engine.execute(statement):
+        click.echo(s)
 
 
 @bp.cli.command()
@@ -40,11 +48,54 @@ def promote(version: Versions):
     db.session.commit()
 
 
-@bp.cli.command()
-@click.argument("version", type=util.get_version)
-def import_mcp(version: str):
-    # TODO
-    pass
+@bp.cli.group()
+@click.argument("version", type=str)
+@click.option("--target", type=util.get_version, default="latest")
+def import_mcp(version: str, target: Versions):
+    # Import as the first user (admin)
+    user: Users = Users.query.first()
+    if user is None:
+        raise click.ClickException("No users created. "
+                                   "Create a user using the 'flask api adduser' command to add an admin user.")
+
+    if target is None:
+        raise click.ClickException("No such version. You may need to import it using 'flask api import-tsrg'")
+
+    versions = util.mcp_stable.load_versions()
+    if version not in versions:
+        raise click.ClickException("mcp_stable version does not exist.")
+
+    artifact = versions[version]
+    click.echo(f"Will import '{artifact.artifact}' into '{target.version}' as user '{user.username}'.")
+    click.confirm("Confirm?")
+
+    click.echo(f"Fetching mcp_stable {artifact.artifact}")
+    mappings = util.load_mcp_mappings(artifact)
+    import_mcp_mappings(user, target.version, mappings)
+
+    click.echo("Committing... ", nl=False)
+    db.session.commit()
+    click.echo("Done")
+
+
+def import_mcp_mappings(user: Users, version: str, mappings: mcp.McpExport):
+    def process(name, m, table, history):
+        entries = {t.srg_name: t for t in table.query.filter_by(version=version)}
+        for i, f in enumerate(m):
+            click.echo(f"\rProcessing {name} {i}/{len(m)}... ", nl=False)
+            if f.searge in entries:
+                info = entries[f.searge]
+                if info.last_change is None:
+                    info.last_change = history(
+                        srg_name=f.searge,
+                        mcp_name=f.name,
+                        changed_by=user
+                    )
+        click.echo("Done")
+
+    process("field", mappings.fields, Fields, FieldHistory)
+    process("method", mappings.methods, Methods, MethodHistory)
+    process("param", mappings.params, Parameters, ParameterHistory)
 
 
 @bp.cli.command()
@@ -53,10 +104,14 @@ def import_tsrg(version):
     if util.get_version(version):
         raise click.ClickException("Version is already imported")
 
-    if version not in util.load_mcpconfig_maven_versions():
+    versions = util.mcp_config.load_versions()
+    if version not in versions:
         raise click.ClickException("No such version")
 
-    tsrg = util.load_tsrg_mappings(version)
+    artifact = versions[version]
+
+    click.echo(f"Fetching {artifact.artifact}")
+    tsrg = util.load_tsrg_mappings(artifact)
 
     import_tsrg_mappings(version, tsrg)
 

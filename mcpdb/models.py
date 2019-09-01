@@ -56,7 +56,6 @@ class Classes(db.Model):
 
 class _SrgHistory(Timestamp):
     id: int = Column(Integer, primary_key=True, autoincrement=True)
-    version: str = Column(Text, nullable=False)
     srg_name: str = Column(Text, nullable=False)
     mcp_name: str = Column(Text, nullable=False)
 
@@ -82,7 +81,7 @@ def _SrgNamed(history_table: Type[db.Model]):
             return Column('last_change_id', Integer, ForeignKey(f"{history_table.__tablename__}.id"))
 
         @declared_attr
-        def last_change(self) -> _SrgHistory:
+        def last_change(self) -> history_table:
             return relationship(history_table, primaryjoin=lambda: history_table.id == self.last_change_id)
 
         # __table_args__ = (
