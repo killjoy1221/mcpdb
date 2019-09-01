@@ -6,7 +6,6 @@ api = Api(bp)
 
 from .login import *
 from .srg import *
-from .cli import *
 
 __all__ = (
     "api",

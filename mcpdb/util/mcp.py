@@ -1,7 +1,13 @@
+import io
+import zipfile
 from csv import DictReader
 from dataclasses import dataclass
-from typing import List, Iterable
+from typing import List
 from zipfile import ZipFile
+
+import requests
+
+from .maven import *
 
 __all__ = (
     "McpMapping",
@@ -26,13 +32,13 @@ class McpExport:
 
 
 def read_mcp_export(z: ZipFile):
-    fields = _read_mapping_file(z, "fields", ("searge", "name", "side", "desc"))
-    methods = _read_mapping_file(z, "methods", ("searge", "name", "side", "desc"))
-    params = _read_mapping_file(z, "params", ("searge", "name", "side"))
+    fields = _read_mapping_file(z, "fields")
+    methods = _read_mapping_file(z, "methods")
+    params = _read_mapping_file(z, "params")
     return McpExport(fields, methods, params)
 
 
-def _read_mapping_file(z: ZipFile, name: str, columns: Iterable[str]):
+def _read_mapping_file(z: ZipFile, name: str):
     f = z.read(name + ".csv").decode('utf-8').splitlines()
     reader = DictReader(f, ["searge", "name", "side", "desc"])
     return list(_read_mappings(reader))
@@ -41,3 +47,9 @@ def _read_mapping_file(z: ZipFile, name: str, columns: Iterable[str]):
 def _read_mappings(reader: DictReader):
     for row in reader:
         yield McpMapping(*row.values())
+
+
+def load_mcp_mappings(artifact: MavenArtifact):
+    with requests.get(artifact.path) as resp:
+        zipbytes = io.BytesIO(resp.content)
+        return read_mcp_export(zipfile.ZipFile(zipbytes, 'r'))

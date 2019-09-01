@@ -4,8 +4,8 @@ import sqlalchemy.orm.exc
 from flask import abort, request, g
 from flask_restplus import Resource, fields
 
-from mcpdb import db
 from . import api, auth
+from .. import db
 from ..models import Classes, Versions, Users
 from ..util import *
 

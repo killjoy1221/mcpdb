@@ -11,9 +11,7 @@ db = SQLAlchemy(app)
 from .models import *
 
 # Import later to prevent import errors
-from .util import *
-
+from .cli import *
 from .api import bp
 
 app.register_blueprint(bp)
-

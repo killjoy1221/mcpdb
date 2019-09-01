@@ -1,10 +1,20 @@
 from __future__ import annotations
 
+import io
 import re
+import zipfile
 from dataclasses import dataclass, field
 from typing import Dict, TypeVar, Generic, Optional, Iterable, List, Tuple
 
-__all__ = ("TSrg", "parse", "parse_descriptor")
+import requests
+
+from .maven import *
+
+__all__ = (
+    "TSrg",
+    "parse",
+    "parse_descriptor"
+)
 
 field_regex = re.compile(r'^field_(\d+)_(\w+)$')
 func_regex = re.compile(r'^func_(\d+)_(\w+)$')
@@ -158,3 +168,24 @@ def parse_descriptor(signature) -> Tuple[List[str], str]:
                 current_type = None
 
     return targs, ret
+
+
+def load_tsrg_mappings(artifact: MavenArtifact):
+    with requests.get(artifact.path) as resp:
+        zipbytes = io.BytesIO(resp.content)
+
+        with zipfile.ZipFile(zipbytes, 'r') as z:
+            joined = z.read('config/joined.tsrg').decode('utf-8').splitlines()
+            ts = parse(joined)
+
+            static_methods = z.read('config/static_methods.txt').decode('utf-8').splitlines()
+            for func in static_methods:
+                ts.methods[func].static = True
+
+            constructors = z.read('config/constructors.txt').decode('utf-8').splitlines()
+            for c in constructors:
+                c_id, owner, sig = c.split(' ')
+                if owner in ts.classes.by_srg:
+                    ts.classes.by_srg[owner].add_constructor(*c.split(' '))
+
+            return ts

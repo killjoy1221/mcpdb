@@ -1,11 +1,8 @@
 import click
 
-from .. import bp
-from ... import db
-from ... import mcp
-from ... import util
-from ...models import *
-from ...tsrg import *
+from . import app, db, util
+from .models import *
+from .util import mcp, tsrg, maven
 
 __all__ = ()
 
@@ -16,14 +13,14 @@ def check_loaded_version(version):
     return version
 
 
-@bp.cli.command()
+@app.cli.command()
 @click.argument("statement")
 def execute(statement):
     for s in db.engine.execute(statement):
         click.echo(s)
 
 
-@bp.cli.command()
+@app.cli.command()
 @click.argument("username")
 @click.password_option('--password')
 def adduser(username, password):
@@ -33,7 +30,7 @@ def adduser(username, password):
     click.echo("User created.")
 
 
-@bp.cli.command()
+@app.cli.command()
 @click.argument("version", type=util.get_version)
 def promote(version: Versions):
     """Used to promote a version
@@ -48,7 +45,7 @@ def promote(version: Versions):
     db.session.commit()
 
 
-@bp.cli.command()
+@app.cli.command()
 @click.argument("version", type=str)
 @click.option("--target", type=util.get_version, default="latest")
 def import_mcp(version: str, target: Versions):
@@ -61,7 +58,7 @@ def import_mcp(version: str, target: Versions):
     if target is None:
         raise click.ClickException("No such version. You may need to import it using 'flask api import-tsrg'")
 
-    versions = util.mcp_stable.load_versions()
+    versions = maven.mcp_stable.load_versions()
     if version not in versions:
         raise click.ClickException("mcp_stable version does not exist.")
 
@@ -70,7 +67,7 @@ def import_mcp(version: str, target: Versions):
     click.confirm("Confirm?")
 
     click.echo(f"Fetching mcp_stable {artifact.artifact}")
-    mappings = util.load_mcp_mappings(artifact)
+    mappings = mcp.load_mcp_mappings(artifact)
     import_mcp_mappings(user, target.version, mappings)
 
     click.echo("Committing... ", nl=False)
@@ -81,7 +78,7 @@ def import_mcp(version: str, target: Versions):
 def import_mcp_mappings(user: Users, version: str, mappings: mcp.McpExport):
     def process(m, srg_type: util.SrgType):
         name = srg_type.table.__tablename__
-        entries = {t.srg_name: t for t in srg_type.table.query.filter_by(version=version)}
+        entries = {e.srg_name: e for e in srg_type.table.query.filter_by(version=version)}
         for i, e in enumerate(m):
             click.echo(f"\rProcessing {i + 1}/{len(m) + 1} {name}... ", nl=False)
             if e.searge in entries:
@@ -102,7 +99,7 @@ def import_mcp_mappings(user: Users, version: str, mappings: mcp.McpExport):
         process(f, t)
 
 
-@bp.cli.command()
+@app.cli.command()
 @click.argument("target", type=util.get_version)
 @click.option("--origin", type=util.get_version, default='latest')
 def migrate_mcp(target: Versions, origin: Versions):
@@ -126,22 +123,22 @@ def migrate_mcp_mappings(mcp_from, mcp_to):
         migrate(t)
 
 
-@bp.cli.command()
+@app.cli.command()
 @click.argument("version")
 def import_tsrg(version):
     if util.get_version(version):
         raise click.ClickException("Version is already imported")
 
-    versions = util.mcp_config.load_versions()
+    versions = maven.mcp_config.load_versions()
     if version not in versions:
         raise click.ClickException("No such version")
 
     artifact = versions[version]
 
     click.echo(f"Fetching {artifact.artifact}")
-    tsrg = util.load_tsrg_mappings(artifact)
+    srg = tsrg.load_tsrg_mappings(artifact)
 
-    import_tsrg_mappings(version, tsrg)
+    import_tsrg_mappings(version, srg)
 
     click.echo("Committing to database...", nl=False)
     db.session.commit()
@@ -160,7 +157,7 @@ def import_tsrg(version):
     db.session.commit()
 
 
-def import_tsrg_mappings(version, mappings: TSrg):
+def import_tsrg_mappings(version, mappings: tsrg.TSrg):
     click.echo(f"Loading {version} mappings with...")
     click.echo(f"\t{len(mappings.classes)} classes")
     click.echo(f"\t{len(mappings.fields)} fields")
