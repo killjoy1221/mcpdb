@@ -53,10 +53,10 @@ def import_mcp(version: str, target: Versions):
     user: Users = Users.query.first()
     if user is None:
         raise click.ClickException("No users created. "
-                                   "Create a user using the 'flask api adduser' command to add an admin user.")
+                                   "Create a user using the 'flask adduser' command to add an admin user.")
 
     if target is None:
-        raise click.ClickException("No such version. You may need to import it using 'flask api import-tsrg'")
+        raise click.ClickException("No such version. You may need to import it using 'flask import-tsrg'")
 
     versions = maven.mcp_stable.load_versions()
     if version not in versions:

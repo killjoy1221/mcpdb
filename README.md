@@ -2,9 +2,45 @@
 
 A database for mcp accessible via REST
 
+## Quickstart
+
+1. Install python 3.7 and a virtualenv if desired, then install using pip.
+    ```
+    pip install git+https://github.com/killjoy1221/mcpdb
+    ```
+2. Generate a secret key to use for token generation. Save it as `SECRET_KEY`
+ in either `config.py` or an environment variable.
+ 
+3. Set the `SQLALCHEMY_DATABASE_URI` variable with your database's ODBC
+ connection URI. It defaults to a sqlite3 connection, which may not be desired.
+ 
+4. Run the following commands to get started, following the prompts as they
+ appear.
+    ```
+    flask adduser admin
+    flask import-tsrg 1.14.4
+    flask import-mcp 53-1.14.2
+    ```
+
+5. Now run the following command to start the server. Press Ctrl+C to quit.
+    ```
+    flask run
+    ```
+
+
+#### Notes
+
+- Public user registration has not been implemented, so any new users will need
+ to be created by an admin via the `adduser` flask command. 
+
+- If you need to add more versions of MCP, run the `import-tsrg <mcp_version>`
+ command again. To mark a version as latest, use the `flask promote <version>`
+ command.
+
 ## Configuration
 
-See `config.py` for an example configuration and defaults.
+See `config.py` for an example configuration and defaults. Alternatively,
+ environment variables may be usedd.
 
 ## API Usage
 
