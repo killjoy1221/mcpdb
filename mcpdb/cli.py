@@ -76,24 +76,25 @@ def import_mcp(version: str, target: Versions):
 
 
 def import_mcp_mappings(user: Users, version: str, mappings: mcp.McpExport):
-    def process(m, srg_type: util.SrgType):
-        name = srg_type.table.__tablename__
-        entries = {e.srg_name: e for e in srg_type.table.query.filter_by(version=version)}
+    def process(m, table: McpNamedTable):
+        name = table.__tablename__
+        entries = {e.srg_name: e for e in table.query.filter_by(version=version)}
         for i, e in enumerate(m):
             click.echo(f"\rProcessing {i + 1}/{len(m) + 1} {name}... ", nl=False)
             if e.searge in entries:
                 info = entries[e.searge]
                 if info.last_change is None:
-                    info.last_change = srg_type.history(
+                    info.last_change = NameHistory(
+                        member_type=table.member_type,
                         srg_name=e.searge,
                         mcp_name=e.name,
                         changed_by=user
                     )
         click.echo("Done")
 
-    fields = mappings.fields, util.FieldType
-    methods = mappings.methods, util.MethodType
-    params = mappings.params, util.ParamType
+    fields = mappings.fields, Fields
+    methods = mappings.methods, Methods
+    params = mappings.params, Parameters
 
     for f, t in fields, methods, params:
         process(f, t)

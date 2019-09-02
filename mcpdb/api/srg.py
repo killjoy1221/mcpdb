@@ -6,7 +6,7 @@ from flask_restplus import Resource, fields
 
 from . import api, auth
 from .. import db
-from ..models import Classes, Versions, Users
+from ..models import *
 from ..util import *
 
 __all__ = ()
@@ -49,21 +49,18 @@ history_model = api.model('History', {
 })
 
 
-def get_srg_name(srg_type: SrgType, name: str):
+def get_srg_name(table: SrgNamedTable, name: str):
     version = get_version(request.values.get('version', 'latest'))
     if version is None:
         abort(404, "No such version")
 
     version = version.version
 
-    table = srg_type.table
-    history = srg_type.history
-
     class_name = None
-    if srg_type is ClassType:
+    if table is Classes:
         class_name = name
     elif '.' in name:
-        if srg_type is ParamType:
+        if table is Parameters:
             abort(400, "Parameters cannot be filtered by class")
         class_name = name[:name.rfind('.')]
         name = name[name.rfind('.') + 1:]
@@ -88,10 +85,12 @@ def get_srg_name(srg_type: SrgType, name: str):
             # Take no chances. Class name should match exactly
             abort(404, "Ambiguous class name")
         else:
-            if srg_type is ClassType:
+            if table is Classes:
                 return class_info
 
             search['class_id'] = class_info.id
+
+    info: SrgNamed
 
     try:
         info = table.query.filter_by(srg_id=int(name), **search).all()
@@ -103,7 +102,7 @@ def get_srg_name(srg_type: SrgType, name: str):
             info = table.query.filter_by(obf_name=name, **search).all()
         if not info:
             # search by mcp
-            info = table.query.filter_by(**search).join(history).filter(history.mcp_name == name).all()
+            info = table.query.filter_by(**search).join(NameHistory).filter(NameHistory.mcp_name == name).all()
 
     if not info:
         raise abort(404, "Mapping not found")
@@ -115,7 +114,7 @@ valid_member_chars = string.ascii_letters + string.digits + "_$"
 
 
 @auth.login_required
-def set_srg_name(srg_type: SrgType, name: str):
+def set_srg_name(table: McpNamedTable, name: str):
     version = get_version(request.values.get('version', 'latest'))
     if version is None:
         raise abort(404, "No such version")
@@ -136,7 +135,7 @@ def set_srg_name(srg_type: SrgType, name: str):
     if force and not user.admin:
         raise abort(403)
 
-    info = srg_type.table.query.filter_by(version=version, srg_name=name).one_or_none()
+    info = table.query.filter_by(version=version, srg_name=name).one_or_none()
     if info is None:
         raise abort(404)
 
@@ -154,7 +153,8 @@ def set_srg_name(srg_type: SrgType, name: str):
             old_name=old_mcp
         )
 
-    info.last_change = srg_type.history(
+    info.last_change = NameHistory(
+        member_type=table.member_type,
         srg_name=name,
         mcp_name=mcp,
         changed_by=user
@@ -188,22 +188,22 @@ class VersionResource(Resource):
 
 @api.route('/class/<name>')
 class ClassResource(Resource):
-    srg_type: SrgType
+    srg_type: McpNamed
 
     @api.doc(params={'version': 'The Minecraft Version, defaults to latest.'},
              responses={404: "No name found or ambiguous class"})
     @api.marshal_with(base_model)
     def get(self, name):
-        return get_srg_name(ClassType, name)
+        return get_srg_name(Classes, name)
 
 
 def _init_resources():
-    def init(endpoint_name, srg_type, get_model):
+    def init(endpoint_name, table, get_model):
         @api.route(f"/{endpoint_name}/<name>")
         class BaseResource(Resource):
             @api.marshal_with(get_model, as_list=True)
             def get(self, name):
-                return get_srg_name(srg_type, name)
+                return get_srg_name(table, name)
 
             @api.marshal_with(srg_update)
             @api.doc(responses={
@@ -212,17 +212,17 @@ def _init_resources():
             })
             @api.expect(srg_input_model)
             def put(self, name):
-                return set_srg_name(srg_type, name)
+                return set_srg_name(table, name)
 
         @api.route(f"/{endpoint_name}/<name>/history")
         class HistoryResource(Resource):
             @api.marshal_with(history_model, as_list=True)
             def get(self, name):
-                return srg_type.history.query.filter_by(srg_name=name).all()
+                return NameHistory.query.filter_by(member_type=MemberType(endpoint_name), srg_name=name).all()
 
-    for n, t, m in [("field", FieldType, field_model),
-                    ("method", MethodType, method_model),
-                    ("param", ParamType, param_model)]:
+    for n, t, m in [("field", Fields, field_model),
+                    ("method", Methods, method_model),
+                    ("param", Parameters, param_model)]:
         init(n, t, m)
 
 

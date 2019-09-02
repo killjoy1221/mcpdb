@@ -1,19 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TypeVar, Generic, Type
-
-from ..models import *
+from ..models import Versions, Active
 
 __all__ = (
     "get_latest",
     "get_version",
-    "descriptor_to_type",
-    "SrgType",
-    "ClassType",
-    "FieldType",
-    "MethodType",
-    "ParamType"
+    "descriptor_to_type"
 )
 
 
@@ -48,19 +40,3 @@ def descriptor_to_type(desc):
     if c in SIMPLE_DESC:
         return SIMPLE_DESC[c]
     raise ValueError("Unexpected descriptor format: " + desc)
-
-
-Table = TypeVar('Table', Classes, Fields, Methods, Parameters)
-History = TypeVar('History', FieldHistory, MethodHistory, ParameterHistory)
-
-
-@dataclass
-class SrgType(Generic[Table, History]):
-    table: Type[Table]
-    history: Type[History] = None
-
-
-ClassType: SrgType[Classes, None] = SrgType(Classes)
-FieldType: SrgType[Fields, FieldHistory] = SrgType(Fields, FieldHistory)
-MethodType: SrgType[Methods, MethodHistory] = SrgType(Methods, MethodHistory)
-ParamType: SrgType[Parameters, ParameterHistory] = SrgType(Parameters, ParameterHistory)
