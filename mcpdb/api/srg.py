@@ -1,8 +1,8 @@
 import string
 
 import sqlalchemy.orm.exc
-from flask import abort, request, g
-from flask_restplus import Resource, fields
+from flask import request, g
+from flask_restplus import Resource, fields, abort
 
 from . import api, auth
 from .. import db
@@ -29,16 +29,6 @@ param_model = api.inherit('Parameter', field_model, {
 method_model = api.inherit('Method', field_model, {
     'descriptor': fields.String,
     'parameters': fields.Nested(param_model)
-})
-
-srg_update = api.model('Srg Update', {
-    'changed': fields.Boolean,
-    'old_name': fields.String
-})
-
-srg_input_model = api.model('Srg Input', {
-    'mcpname': fields.String,
-    'force': fields.Boolean
 })
 
 history_model = api.model('History', {
@@ -121,7 +111,7 @@ def set_srg_name(table: McpNamedTable, name: str):
     version = version.version
 
     try:
-        mcp = request.json['mcpname']
+        mcp = request.json['mcp_name']
         force = request.json.get('force', False)
     except KeyError:
         raise abort(400)
@@ -142,16 +132,8 @@ def set_srg_name(table: McpNamedTable, name: str):
     if info.locked and not force:
         raise abort(403)
 
-    if info.last_change is not None:
-        old_mcp = info.last_change.mcp_name
-    else:
-        old_mcp = None
-
-    if old_mcp == mcp:
-        return dict(
-            changed=False,
-            old_name=old_mcp
-        )
+    if info.last_change is not None and info.last_change.mcp_name == mcp:
+        abort(400, 'MCP Name already is already set')
 
     info.last_change = NameHistory(
         member_type=table.member_type,
@@ -162,21 +144,15 @@ def set_srg_name(table: McpNamedTable, name: str):
 
     db.session.commit()
 
-    return dict(
-        changed=True,
-        old_name=old_mcp,
-    )
-
-
-version_model = api.model('Version', {
-    'latest': fields.String,
-    'versions': fields.List(fields.String)
-})
+    return info, 201
 
 
 @api.route('/versions')
 class VersionResource(Resource):
-    @api.marshal_with(version_model)
+    @api.marshal_with(api.model('Version', {
+        'latest': fields.String,
+        'versions': fields.List(fields.String)
+    }))
     def get(self):
         latest = get_latest()
         versions = Versions.query.all()
@@ -205,12 +181,15 @@ def _init_resources():
             def get(self, name):
                 return get_srg_name(table, name)
 
-            @api.marshal_with(srg_update)
             @api.doc(responses={
+                204: "Success",
                 400: "When bad parameters are passed",
                 403: "When a non-admin tries to force a name"
             })
-            @api.expect(srg_input_model)
+            @api.expect(api.model('Srg Input', {
+                'mcp_name': fields.String,
+                'force': fields.Boolean
+            }), validate=True)
             def put(self, name):
                 return set_srg_name(table, name)
 

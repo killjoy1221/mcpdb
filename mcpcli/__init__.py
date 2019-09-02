@@ -38,5 +38,5 @@ def sf(srg, name, version, force):
 @cli.command()
 @click.argument('srg')
 def fh(srg, *, version='latest'):
-    with requests.get(f'{url}/field/{version}/{srg}/history') as resp:
+    with requests.get(f'{url}/field/{srg}/history') as resp:
         click.echo(resp.json())
