@@ -5,24 +5,17 @@ from . import api
 from ..models import *
 from ..util import get_version
 
-summary_model = api.model("Summary", {
-    'total': fields.Integer,
-    'mapped': fields.Integer,
-    'unmapped': fields.Integer
-})
 dump_model = api.model("Dump", {
     'srg_name': fields.String,
     'mcp_name': fields.String(attribute='last_change.mcp_name')
+})
+dump_doc_model = api.inherit("Dump+Docs", dump_model, {
+    'comment': fields.String
 })
 
 
 @api.route('/summary')
 class SummaryResource(Resource):
-    @api.marshal_with(api.model("Total Summary", {
-        'fields': fields.Nested(summary_model),
-        'methods': fields.Nested(summary_model),
-        'params': fields.Nested(summary_model),
-    }))
     def get(self):
         version = get_version(request.values.get('version', 'latest')).version
 
@@ -35,34 +28,32 @@ class SummaryResource(Resource):
             total = result.count()
             unmapped = result.filter_by(last_change=None).count()
             mapped = total - unmapped
-            return {
-                'total': total,
-                'mapped': mapped,
-                'unmapped': unmapped
-            }
+            return dict(
+                total=total,
+                mapped=mapped,
+                unmapped=unmapped
+            )
 
-        return {
-            'fields': compute(Fields),
-            'methods': compute(Methods),
-            'params': compute(Parameters)
-        }
+        return dict(
+            fields=compute(Fields),
+            methods=compute(Methods),
+            params=compute(Parameters)
+        )
 
 
 @api.route('/dump')
 class SummaryDetailResource(Resource):
-    @api.marshal_with(api.model("Full Dump", {
-        'fields': fields.List(fields.Nested(dump_model)),
-        'methods': fields.List(fields.Nested(dump_model)),
-        'params': fields.List(fields.Nested(dump_model)),
-    }))
     def get(self):
         version = get_version(request.values.get('version', 'latest')).version
+        nodoc = 'nodoc' in request.values
+
+        m = dump_model if nodoc else dump_doc_model
 
         def compute(table):
-            return table.query.filter_by(version=version).filter(table.last_change != None)
+            return table.query.filter_by(version=version).filter(table.last_change != None).all()
 
-        return {
-            'fields': compute(Fields),
-            'methods': compute(Methods),
-            'params': compute(Parameters)
-        }
+        return dict(
+            fields=api.marshal(compute(Fields), m),
+            methods=api.marshal(compute(Methods), m),
+            params=api.marshal(compute(Parameters), m)
+        )
