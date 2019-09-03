@@ -7,12 +7,10 @@ from werkzeug.exceptions import HTTPException, InternalServerError
 bp = Blueprint('api', __name__, url_prefix="/api")
 api = Api(bp)
 
-from .login import *
-from .srg import *
+from . import login, srg, summary
 
 __all__ = (
     "api",
-    "auth",
     "bp"
 )
 

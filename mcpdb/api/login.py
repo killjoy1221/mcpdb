@@ -15,11 +15,6 @@ __all__ = (
 
 auth = HTTPTokenAuth()
 
-login_model = api.model('Login', {
-    'username': fields.String,
-    'password': fields.String
-})
-
 
 def gen_auth_token(user: Users, expiration):
     s = Serializer(app.config['SECRET_KEY'], expires_in=expiration)
@@ -49,7 +44,10 @@ def verify_auth_token(token):
 @api.route('/login')
 class LoginResource(Resource):
 
-    @api.expect(login_model)
+    @api.expect(api.model('Login', {
+        'username': fields.String,
+        'password': fields.String
+    }))
     def post(self):
         username = request.json.get('username')
         password = request.json.get('password')

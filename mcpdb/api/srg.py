@@ -4,7 +4,8 @@ import sqlalchemy.orm.exc
 from flask import request, g
 from flask_restplus import Resource, fields, abort
 
-from . import api, auth
+from . import api
+from .login import auth
 from .. import db
 from ..models import *
 from ..util import *
